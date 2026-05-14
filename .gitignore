@@ -1,1 +1,27 @@
+# Environment — NEVER commit
+config/.env
+.env
+*.env
+
+# Go build artifacts
+*.exe
+*.out
+/bin/
+
+# Go test cache
+*.test
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
 .idea/
+.vscode/
+*.swp
+
+# Docker volumes (if ever stored locally)
+volumes/
+
+# k6 results
+load-test/results/
