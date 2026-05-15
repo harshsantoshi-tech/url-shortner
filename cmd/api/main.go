@@ -14,6 +14,7 @@ import (
 	"github.com/harshsantoshi-tech/url-shortner/config"
 	"github.com/harshsantoshi-tech/url-shortner/internal/cache"
 	"github.com/harshsantoshi-tech/url-shortner/internal/db"
+	"github.com/harshsantoshi-tech/url-shortner/internal/kafka"
 	"github.com/harshsantoshi-tech/url-shortner/internal/shortner"
 )
 
@@ -37,11 +38,16 @@ func main() {
 	defer redisClient.Close()
 	log.Println("✅ Redis connected")
 
-	// ── 4. Wire up shortener ──────────────────────────────────────
-	repo := shortner.NewRepository(database)
-	svc  := shortner.NewService(repo, redisClient, cfg.ShortCodeLength, cfg.BaseURL)
+	// ── 4. Connect Kafka producer ─────────────────────────────────
+	producer := kafka.NewProducer(cfg.KafkaBrokers, cfg.KafkaTopicClickEvents)
+	defer producer.Close()
+	log.Println("✅ Kafka producer ready")
 
-	// ── 5. Setup Gin router ───────────────────────────────────────
+	// ── 5. Wire up shortner ──────────────────────────────────────
+	repo := shortner.NewRepository(database)
+	svc  := shortner.NewService(repo, redisClient, producer, cfg.ShortCodeLength, cfg.BaseURL)
+
+	// ── 6. Setup Gin router ───────────────────────────────────────
 	if cfg.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -53,7 +59,7 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "time": time.Now()})
 	})
 
-	// POST /api/shorten — create a short URL
+	// POST /api/shorten
 	r.POST("/api/shorten", func(c *gin.Context) {
 		var req struct {
 			URL string `json:"url" binding:"required"`
@@ -79,11 +85,14 @@ func main() {
 		})
 	})
 
-	// GET /:short_code — redirect to long URL
+	// GET /:short_code — redirect + publish click event to Kafka
 	r.GET("/:short_code", func(c *gin.Context) {
 		code := c.Param("short_code")
 
-		longURL, err := svc.Redirect(c.Request.Context(), code)
+		longURL, err := svc.Redirect(c.Request.Context(), shortner.RedirectRequest{
+			ShortCode: code,
+			Referrer:  c.GetHeader("Referer"),
+		})
 		if err != nil {
 			if errors.Is(err, shortner.ErrNotFound) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "short URL not found"})
@@ -94,11 +103,10 @@ func main() {
 			return
 		}
 
-		// 302 redirect — temporary (good for analytics tracking)
 		c.Redirect(http.StatusFound, longURL)
 	})
 
-	// ── 6. Start server with graceful shutdown ────────────────────
+	// ── 7. Start server with graceful shutdown ────────────────────
 	srv := &http.Server{
 		Addr:         ":" + cfg.APIPort,
 		Handler:      r,
@@ -107,7 +115,6 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Start in goroutine so we can listen for shutdown signals
 	go func() {
 		log.Printf("🚀 Server running at http://localhost:%s", cfg.APIPort)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -115,7 +122,6 @@ func main() {
 		}
 	}()
 
-	// Block until CTRL+C or kill signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
