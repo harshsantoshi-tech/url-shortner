@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/harshsantoshi/url-shortener/config"
+	"github.com/harshsantoshi-tech/url-shortner/config"
 	"github.com/jmoiron/sqlx"
 
 	_ "github.com/go-sql-driver/mysql" // MySQL driver — blank import registers it
