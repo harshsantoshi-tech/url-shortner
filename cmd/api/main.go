@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/harshsantoshi-tech/url-shortner/config"
+	"github.com/harshsantoshi-tech/url-shortner/internal/analytics"
 	"github.com/harshsantoshi-tech/url-shortner/internal/cache"
 	"github.com/harshsantoshi-tech/url-shortner/internal/db"
 	"github.com/harshsantoshi-tech/url-shortner/internal/kafka"
@@ -43,9 +44,10 @@ func main() {
 	defer producer.Close()
 	log.Println("✅ Kafka producer ready")
 
-	// ── 5. Wire up shortner ──────────────────────────────────────
-	repo := shortner.NewRepository(database)
-	svc  := shortner.NewService(repo, redisClient, producer, cfg.ShortCodeLength, cfg.BaseURL)
+	// ── 5. Wire up services ───────────────────────────────────────
+	repo         := shortner.NewRepository(database)
+	shortnerSvc := shortner.NewService(repo, redisClient, producer, cfg.ShortCodeLength, cfg.BaseURL)
+	analyticsSvc := analytics.NewService(redisClient)
 
 	// ── 6. Setup Gin router ───────────────────────────────────────
 	if cfg.Env == "production" {
@@ -54,12 +56,12 @@ func main() {
 
 	r := gin.Default()
 
-	// Health check
+	// ── Health check ──────────────────────────────────────────────
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "time": time.Now()})
 	})
 
-	// POST /api/shorten
+	// ── POST /api/shorten ─────────────────────────────────────────
 	r.POST("/api/shorten", func(c *gin.Context) {
 		var req struct {
 			URL string `json:"url" binding:"required"`
@@ -69,7 +71,7 @@ func main() {
 			return
 		}
 
-		resp, err := svc.Shorten(c.Request.Context(), shortner.ShortenRequest{
+		resp, err := shortnerSvc.Shorten(c.Request.Context(), shortner.ShortenRequest{
 			LongURL: req.URL,
 		})
 		if err != nil {
@@ -85,11 +87,17 @@ func main() {
 		})
 	})
 
-	// GET /:short_code — redirect + publish click event to Kafka
+	// ── GET /:short_code — redirect ───────────────────────────────
 	r.GET("/:short_code", func(c *gin.Context) {
 		code := c.Param("short_code")
 
-		longURL, err := svc.Redirect(c.Request.Context(), shortner.RedirectRequest{
+		// Skip favicon requests
+		if code == "/favicon.ico" {
+			c.Status(http.StatusNoContent)
+			return
+		}
+
+		longURL, err := shortnerSvc.Redirect(c.Request.Context(), shortner.RedirectRequest{
 			ShortCode: code,
 			Referrer:  c.GetHeader("Referer"),
 		})
@@ -104,6 +112,20 @@ func main() {
 		}
 
 		c.Redirect(http.StatusFound, longURL)
+	})
+
+	// ── GET /api/stats/:short_code — analytics ────────────────────
+	r.GET("/api/stats/:short_code", func(c *gin.Context) {
+		code := c.Param("short_code")
+
+		stats, err := analyticsSvc.GetStats(c.Request.Context(), code)
+		if err != nil {
+			log.Printf("[api] stats error for %s: %v", code, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch stats"})
+			return
+		}
+
+		c.JSON(http.StatusOK, stats)
 	})
 
 	// ── 7. Start server with graceful shutdown ────────────────────
