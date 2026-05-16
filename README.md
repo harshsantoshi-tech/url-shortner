@@ -324,5 +324,5 @@ Each worker (click counter, time trend, referrer) needs to process every message
 **Harsh Santoshi** — Backend Software Engineer
 
 - GitHub: [@harshsantoshi](https://github.com/harshsantoshi-tech)
-- LinkedIn: [linkedin.com/in/harshsantoshi](https://linkedin.com/in/harshsantoshi)
+- LinkedIn: [linkedin.com/in/harshsantoshi](https://www.linkedin.com/in/harsh-santoshi/)
 - Email: harsh.santoshi07@gmail.com
