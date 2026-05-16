@@ -2,7 +2,7 @@
 
 A production-grade URL shortener built in Go, featuring real-time click analytics via Kafka, Redis caching, MySQL persistence, and a live Grafana dashboard.
 
-> Built as a portfolio project to demonstrate distributed systems engineering — the same patterns used in high-scale production systems.
+> Built to demonstrate distributed systems engineering — the same patterns used in high-scale production systems.
 
 ---
 
