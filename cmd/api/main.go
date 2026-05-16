@@ -16,7 +16,9 @@ import (
 	"github.com/harshsantoshi-tech/url-shortner/internal/cache"
 	"github.com/harshsantoshi-tech/url-shortner/internal/db"
 	"github.com/harshsantoshi-tech/url-shortner/internal/kafka"
+	"github.com/harshsantoshi-tech/url-shortner/internal/metrics"
 	"github.com/harshsantoshi-tech/url-shortner/internal/shortner"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -56,6 +58,13 @@ func main() {
 
 	r := gin.Default()
 
+	// Attach Prometheus middleware to all routes
+	r.Use(metrics.PrometheusMiddleware())
+
+	// ── Prometheus metrics endpoint ───────────────────────────────
+	// Scraped by Prometheus every 15s, read by Grafana
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
 	// ── Health check ──────────────────────────────────────────────
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "time": time.Now()})
@@ -91,7 +100,6 @@ func main() {
 	r.GET("/:short_code", func(c *gin.Context) {
 		code := c.Param("short_code")
 
-		// Skip favicon requests
 		if code == "/favicon.ico" {
 			c.Status(http.StatusNoContent)
 			return
@@ -114,7 +122,7 @@ func main() {
 		c.Redirect(http.StatusFound, longURL)
 	})
 
-	// ── GET /api/stats/:short_code — analytics ────────────────────
+	// ── GET /api/stats/:short_code ────────────────────────────────
 	r.GET("/api/stats/:short_code", func(c *gin.Context) {
 		code := c.Param("short_code")
 

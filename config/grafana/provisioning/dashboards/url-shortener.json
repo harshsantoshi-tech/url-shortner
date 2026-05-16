@@ -1,0 +1,123 @@
+{
+  "title": "URL Shortener Dashboard",
+  "uid": "url-shortener",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Requests Per Second",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(urlshortener_http_requests_total[1m])",
+          "legendFormat": "{{method}} {{path}} {{status}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Redirect Latency p95",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.95, rate(urlshortener_http_request_duration_seconds_bucket{path=\"/:short_code\"}[1m]))",
+          "legendFormat": "p95"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.50, rate(urlshortener_http_request_duration_seconds_bucket{path=\"/:short_code\"}[1m]))",
+          "legendFormat": "p50"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Total URLs Shortened",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 8, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "urlshortener_urls_shortened_total"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Total Redirects",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 8, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "urlshortener_redirects_total"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Cache Hit Rate %",
+      "type": "gauge",
+      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(urlshortener_cache_hits_total[5m]) / (rate(urlshortener_cache_hits_total[5m]) + rate(urlshortener_cache_misses_total[5m])) * 100",
+          "legendFormat": "Hit Rate %"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Kafka Publish Rate",
+      "type": "timeseries",
+      "gridPos": { "x": 18, "y": 8, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(urlshortener_kafka_publish_total[1m])",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Cache Hits vs Misses",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(urlshortener_cache_hits_total[1m])",
+          "legendFormat": "Cache Hits"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(urlshortener_cache_misses_total[1m])",
+          "legendFormat": "Cache Misses"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "HTTP Errors",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(urlshortener_http_requests_total{status=~\"4..|5..\"}[1m])",
+          "legendFormat": "{{status}} {{path}}"
+        }
+      ]
+    }
+  ]
+}
